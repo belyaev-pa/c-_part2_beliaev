@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Windows.Forms;
 using System.Drawing;
 using System.Collections.Generic;
@@ -11,14 +12,14 @@ namespace MyGame
         private static BufferedGraphicsContext _context;
         public static BufferedGraphics Buffer;
         private static int _score = 0;
-        // private static Bullet[] _bullets;        
-        private static Bullet _bullet;
-        private static Asteroid[] _asteroids;
-        private static ImageStar[] _stars;
+        private static int _startCount = 25;
+        private static List<Bullet> _bullets = new List<Bullet>();
+        private static List<Asteroid> _asteroids = new List<Asteroid>();
         private static Aidkit[] _aidkits;
         private static Ship _ship;
         private static Image backgroundImage = Image.FromFile(@"images/background.jpg");
         private static Image aidkitImage = Image.FromFile(@"images/aidkit.png");
+        private static Image bulletImage = Image.FromFile(@"images/bullet.png");
         private static List<Image> planetimageList = new List<Image>() { Image.FromFile(@"images/planet1.png"), 
                                                                          Image.FromFile(@"images/planet2.png"), 
                                                                          Image.FromFile(@"images/planet3.png") };
@@ -28,6 +29,7 @@ namespace MyGame
         // Ширина и высота игрового поля
         public static int Width { get; set; }
         public static int Height { get; set; }
+        public static int Level { get; set; }
         public static BaseObject[] _objs;
         static Game()
         {
@@ -43,6 +45,7 @@ namespace MyGame
             // Запоминаем размеры формы
             Width = form.ClientSize.Width;            
             Height = form.ClientSize.Height;
+            Level = 1;
             if (Width > 1200 || Width < 0 || Height > 750 || Height < 0) throw new ArgumentOutOfRangeException();
             // Связываем буфер в памяти с графическим объектом, чтобы рисовать в буфере
             Buffer = _context.Allocate(g, new Rectangle(0, 0, Width, Height));
@@ -62,117 +65,83 @@ namespace MyGame
             foreach (Asteroid obj in _asteroids)
                 obj?.Draw();
             foreach (Aidkit obj in _aidkits)
-                obj?.Draw();
-            foreach (ImageStar obj in _stars)
-                obj.Draw();
-            // foreach (Bullet obj in _bullets)
-            //     obj.Draw();
-            _bullet?.Draw();
+                obj?.Draw();          
+            foreach (Bullet obj in _bullets)
+                 obj.Draw();
             _ship?.Draw();
             if (_ship != null)
                 Buffer.Graphics.DrawString("Energy:" + _ship.Energy, SystemFonts.DefaultFont, Brushes.White, 0, 0);
-            Buffer.Graphics.DrawString("Score:" + _score, SystemFonts.DefaultFont, Brushes.White, 150, 0);    
+            Buffer.Graphics.DrawString("Score:" + _score, SystemFonts.DefaultFont, Brushes.White, 150, 0);
+            Buffer.Graphics.DrawString("Level:" + Game.Level, SystemFonts.DefaultFont, Brushes.White, 300, 0);
             Buffer.Render();
         }      
         public static void Load()
         {
-            _objs = new BaseObject[30];
-            // _bullets = new Bullet[5];
-            _bullet = new Bullet(new Point(0, Height/2), new Point(10, 0), new Size(12, 3));
-            _asteroids = new Asteroid[50];
-            _stars = new ImageStar[30];
+            _objs = new BaseObject[30];                                    
             _ship = new Ship(new Point(10, 400), new Point(8, 8), new Size(40, 70));
             _aidkits = new Aidkit[5];
             for (var i = 0; i < _objs.Length; i++)
             {
                 int r = rnd.Next(5, 50);
                 _objs[i] = new Star(new Point(600, rnd.Next(0, Game.Height)), new Point(-r, r), new Size(3, 3));                
-            }
-            for (var i = 0; i < _stars.Length; i++)
-            {
-                int r = rnd.Next(5, 10);
-                _stars[i] = new ImageStar(new Point(rnd.Next(0, Width), rnd.Next(0, Height)), 
-                                          new Point(r, r), 
-                                          new Size(2, 2));
-            }
-            for (var i = 0; i < _asteroids.Length; i++)
-            {
-                int r = rnd.Next(5, 50);
-                _asteroids[i] = new Asteroid(planetimageList[rnd.Next(0,3)], new Point(600, rnd.Next(0, Game.Height)), new Point(-r / 5, r), new Size(r, r));
-            }
+            }            
+            Generate_Asteroids();            
             for (var i = 0; i < _aidkits.Length; i++)
             {                
                 _aidkits[i] = new Aidkit(aidkitImage, new Point(0, 0), new Point(rnd.Next(100, Game.Width), rnd.Next(0, Game.Height)), new Size(50, 45));
-            }
-            // for (var i = 0; i < _asteroids.Length; i++)
-            // {
-            //     int r = rnd.Next(5, 50);
-            //     _bullets[i] = new Bullet(new Point(0, Height/2), new Point(10, 0), new Size(12, 3));
-            // }
-            
-        }        
+            }            
+        }
         public static void Update()
         {
+            if (_asteroids.Count == 0)            
+            {
+                Game.Level++;
+                _bullets.Clear();
+                System.GC.Collect();                
+                Generate_Asteroids();
+            }
             foreach (BaseObject obj in _objs)
                 obj.Update();
-            for (var i = 0; i < _asteroids.Length; i++)
-            {
-                if (_asteroids[i] == null) continue;
+            for (var i = 0; i < _asteroids.Count; i++)
+            {                
                 _asteroids[i].Update();
-                if (_bullet != null && _asteroids[i].Collision(_bullet))
+                if (_asteroids[i] != null && _ship.Collision(_asteroids[i]))
                 {
-                    System.Media.SystemSounds.Hand.Play();
-                    _asteroids[i] = null;
-                    _bullet = null;
-                    _score += 1;
+                    _ship?.EnergyLow(rnd.Next(1, 10));
+                    System.Media.SystemSounds.Asterisk.Play();
+                    _asteroids.RemoveAt(i);                    
+                    i--;
                     continue;
                 }
-                if (!_ship.Collision(_asteroids[i])) continue;                
-                _ship?.EnergyLow(rnd.Next(1, 10));
-                System.Media.SystemSounds.Asterisk.Play();
+                for (int j = 0; j < _bullets.Count; j++)
+                    if (_asteroids[i] != null && _bullets[j].Collision(_asteroids[i]))
+                    {
+                        System.Media.SystemSounds.Hand.Play();
+                        _asteroids.RemoveAt(i);
+                        i--;
+                        _bullets.RemoveAt(j);
+                        j--;
+                        _score += 1;    
+                        break;
+                    }
                 if (_ship.Energy <= 0) _ship?.Die();
-                // if (obj.Collision(_bullet)) 
-                // {
-                //     System.Media.SystemSounds.Hand.Play(); 
-                //     obj.Pos.Y = rnd.Next(0, Height);
-                //     obj.Pos.X = rnd.Next(0, Width);
-                // }
             }
             for (var i = 0; i < _aidkits.Length; i++)
             {
                 if (_aidkits[i] == null) continue;
                 _aidkits[i].Update();
-                if (_bullet != null && _aidkits[i].Collision(_bullet))
-                {
-                    System.Media.SystemSounds.Hand.Play();
-                    _aidkits[i] = null;
-                    _bullet = null;
-                    _ship?.EnergyUp(rnd.Next(10, 15));
-                    continue;
-                }                
-            }
-            foreach (ImageStar obj in _stars)
-            {
-                obj.Update();
-                if (_bullet != null && obj.Collision(_bullet)) 
-                {
-                    System.Media.SystemSounds.Hand.Play(); 
-                    obj.Pos.Y = rnd.Next(0, Height);
-                    obj.Pos.X = rnd.Next(0, Width);
-                }
-            }
-            
-            //foreach (Bullet obj in _bullets)
-            //{
-                //obj.Update();
-                //if (obj.Collision(_bullets)) 
-                //{
-                    //System.Media.SystemSounds.Hand.Play(); 
-                    //obj.Pos.Y = rnd.Next(0, Height);
-                    //obj.Pos.X = rnd.Next(0, Width);
-                //}
-            //}
-            _bullet?.Update();
+                for (int j = 0; j < _bullets.Count; j++)                    
+                    if (_aidkits[i] != null && _bullets[j].Collision(_aidkits[i]))
+                    {
+                        System.Media.SystemSounds.Hand.Play();
+                        _aidkits[i] = null;
+                        _bullets.RemoveAt(j);
+                        j--;
+                        _ship?.EnergyUp(rnd.Next(10, 15));                        
+                    }
+            }                        
+            foreach (Bullet obj in _bullets)        
+                obj.Update();              
         }
         private static void Timer_Tick(object sender, EventArgs e)
         {
@@ -181,11 +150,27 @@ namespace MyGame
         }
         private static void Form_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.KeyCode == Keys.ControlKey) _bullet = new Bullet(new Point(_ship.Pos.X + _ship.shipImage.Width, _ship.Pos.Y + _ship.shipImage.Height/2), 
-                                                                   new Point(4, 0), 
-                                                                   new Size(4, 1));
+            if (e.KeyCode == Keys.ControlKey) 
+            {
+                _bullets.Add(new Bullet(bulletImage,
+                                        new Point(_ship.Pos.X + _ship.shipImage.Width - bulletImage.Width/2, _ship.Pos.Y + _ship.shipImage.Height/2 - bulletImage.Height/2), 
+                                        new Point(7+2*Game.Level, 0), 
+                                        new Size(4, 1)));
+            }
             if (e.KeyCode == Keys.Up) _ship.Up();
             if (e.KeyCode == Keys.Down) _ship.Down();
+            if (e.KeyCode == Keys.Right) _ship.Right();
+            if (e.KeyCode == Keys.Left) _ship.Left();
+        }
+        private static void Generate_Asteroids()
+        {            
+            for (var i = 0; i < _startCount+Game.Level*5; i++)
+            {                
+                Image im = planetimageList[rnd.Next(0,3)];
+                _asteroids.Add(new Asteroid(im, new Point(rnd.Next(Game.Width/3, Game.Width), rnd.Next(0, Game.Height)), 
+                                            new Point((rnd.Next(0,2)*2-1)*7+2*Game.Level, (rnd.Next(0,2)*2-1)*7+3*Game.Level), 
+                                            new Size(im.Width, im.Height)));
+            }
         }
         public static void Finish()
         {
@@ -236,51 +221,6 @@ namespace MyGame
             if (Pos.X < 0) Pos.X = Game.Width + Size.Width;
         }
     }
-    class ImageStar: BaseObject
-    {
-        /// <summary>
-        /// Класс ImageStar    
-        /// наследуется от баозового объекта     
-        /// рисует случайную картинку из списка во время обновления
-        /// так же добавили немного неопределенности в передвижение картинок        
-        /// </summary>        
-        List<Image> imageList = new List<Image>() { Image.FromFile(@"images/star1.ico"), 
-                                                    Image.FromFile(@"images/star2.ico"), 
-                                                    Image.FromFile(@"images/star3.ico") };
-        //Image.FromFile(fileList[_rnd.Next(fileList.Count)])
-        public ImageStar(Point pos, Point dir, Size size):base(pos,dir,size)
-        {            
-        } 
-        public override void Draw()
-        {                                    
-            Game.Buffer.Graphics.DrawImage(imageList[_rnd.Next(0,3)], Pos.X, Pos.Y, 8,8);
-        }      
-        public override void Update()
-        {
-            Pos.X = Pos.X + Dir.X;
-            Pos.Y = Pos.Y + Dir.Y;            
-            if (Pos.X < 0) {
-                Dir.X = -Dir.X;
-                if (_rnd.Next(0, 2) == 0 && Pos.Y > 0 && Pos.Y < Game.Height)
-                    Dir.Y = -Dir.Y;
-            }
-            if (Pos.X > Game.Width) {            
-                Dir.X = -Dir.X;
-                if (_rnd.Next(0, 2) == 0 && Pos.Y > 0 && Pos.Y < Game.Height)
-                    Dir.Y = -Dir.Y;
-            }
-            if (Pos.Y < 0) {
-                Dir.Y = -Dir.Y;
-                if (_rnd.Next(0, 2) == 0 && Pos.X > 0 && Pos.X < Game.Width)
-                    Dir.X = -Dir.X;
-            }
-            if (Pos.Y > Game.Height){
-                Dir.Y = -Dir.Y;
-                if (_rnd.Next(0, 2) == 0 && Pos.X > 0 && Pos.X < Game.Width)
-                    Dir.X = -Dir.X;
-            } 
-        }          
-    }
     // Создаем класс Asteroid, так как мы теперь не можем создавать объекты абстрактного класса BaseObject
     class Asteroid: BaseObject, ICloneable, IComparable
     {
@@ -288,7 +228,7 @@ namespace MyGame
         public Image asteroidImage;
         public Asteroid(Image img, Point pos, Point dir, Size size) : base(pos, dir, size)
         {
-            Power=1;
+            Power = 1;
             asteroidImage = img;
         }
         public override void Draw()
@@ -344,13 +284,15 @@ namespace MyGame
         }
     }    
     class Bullet : BaseObject
-    {        
-        public Bullet(Point pos, Point dir, Size size) : base(pos, dir, size)
-        {            
+    {          
+        public Image bulletImage;      
+        public Bullet(Image img, Point pos, Point dir, Size size) : base(pos, dir, size)
+        {    
+            bulletImage = img;        
         }
         public override void Draw()
         {
-            Game.Buffer.Graphics.DrawRectangle(Pens.OrangeRed, Pos.X, Pos.Y, Size.Width, Size.Height);
+            Game.Buffer.Graphics.DrawImage(bulletImage, Pos.X, Pos.Y, bulletImage.Width, bulletImage.Height);
         }
         public override void Update()
         {            
@@ -389,7 +331,15 @@ namespace MyGame
         }
         public void Down()
         {
-            if (Pos.Y < Game.Height) Pos.Y = Pos.Y + Dir.Y;
+            if (Pos.Y+shipImage.Height < Game.Height) Pos.Y = Pos.Y + Dir.Y;
+        }
+        public void Left()
+        {
+            if (Pos.X > 0) Pos.X = Pos.X - Dir.X;
+        }
+        public void Right()
+        {
+            if (Pos.X < Game.Width/5) Pos.X = Pos.X + Dir.X;
         }
         public void Die()
         {
