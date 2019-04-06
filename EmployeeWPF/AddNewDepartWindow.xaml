@@ -1,0 +1,29 @@
+﻿<Window x:Name="AddNewDepartWin" x:Class="EmployeeWPF.AddNewDepartWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:EmployeeWPF"
+        mc:Ignorable="d"
+        Title="Добавление нового подразделения" Height="200" Width="400" ResizeMode="NoResize">
+    <Grid>
+        <TextBox x:Name="tbDepartName"
+                 HorizontalAlignment="Left"
+                 Height="23" Margin="125,10,0,0"
+                 TextWrapping="Wrap"
+                 VerticalAlignment="Top"
+                 Width="250"/>
+        <Label x:Name="lbDepartName"
+               Content="Название"
+               HorizontalAlignment="Left"
+               Margin="10,10,0,0" VerticalAlignment="Top"
+               RenderTransformOrigin="-0.236,0.214"
+               Width="110"/>
+        <Button x:Name="btAddDepartment"
+                Content="Добавить"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Width="86" Click="BtAddDepartment_Click"
+                Margin="0,0,0,5"/>
+    </Grid>
+</Window>
